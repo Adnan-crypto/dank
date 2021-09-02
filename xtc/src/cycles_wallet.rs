@@ -5,10 +5,12 @@ use crate::history::{HistoryBuffer, Transaction, TransactionKind};
 use crate::ledger::Ledger;
 use crate::management::IsShutDown;
 use crate::meta::meta;
+use crate::fee;
 use ic_cdk::export::candid::{CandidType, Nat, Principal};
 use ic_cdk::*;
 use ic_cdk_macros::*;
 use serde::*;
+use crate::fee::compute_fee;
 
 #[query]
 fn name() -> Option<&'static str> {
@@ -39,9 +41,10 @@ async fn call(args: CallCanisterArgs) -> Result<CallResult, String> {
         return Err("Attempted to call forward on self. This is not allowed.".to_string());
     }
 
+    let fee = compute_fee(args.cycles);
     let ledger = storage::get_mut::<Ledger>();
     ledger
-        .withdraw(&user, args.cycles)
+        .withdraw(&user, args.cycles + fee)
         .map_err(|_| "Insufficient Balance".to_string())?;
 
     match api::call::call_raw(
@@ -55,10 +58,12 @@ async fn call(args: CallCanisterArgs) -> Result<CallResult, String> {
         Ok(x) => {
             let refunded = api::call::msg_cycles_refunded();
             let cycles = args.cycles - refunded;
+            let new_fee = compute_fee(cycles);
+            let refunded = refunded + (fee - new_fee);
             let transaction = Transaction {
                 timestamp: api::time(),
                 cycles,
-                fee: 0,
+                fee: new_fee,
                 kind: TransactionKind::CanisterCalled {
                     from: user.clone(),
                     canister: args.canister.clone(),
@@ -110,9 +115,10 @@ pub struct CanisterSettings {
 async fn create_canister(args: CreateCanisterArgs) -> Result<CreateResult, String> {
     IsShutDown::guard();
     let user = caller();
+    let fee = compute_fee(args.cycles);
     let ledger = storage::get_mut::<Ledger>();
     ledger
-        .withdraw(&user, args.cycles)
+        .withdraw(&user, args.cycles + fee)
         .map_err(|_| "Insufficient Balance".to_string())?;
 
     #[derive(CandidType)]
@@ -140,10 +146,12 @@ async fn create_canister(args: CreateCanisterArgs) -> Result<CreateResult, Strin
         Ok((x,)) => {
             let refunded = api::call::msg_cycles_refunded();
             let cycles = args.cycles - refunded;
+            let new_fee = compute_fee(cycles);
+            let refunded = refunded + (fee - new_fee);
             let transaction = Transaction {
                 timestamp: api::time(),
                 cycles,
-                fee: 0,
+                fee: new_fee,
                 kind: TransactionKind::CanisterCreated {
                     from: user.clone(),
                     canister: x.canister_id,
@@ -192,10 +200,11 @@ struct SendCyclesArgs {
 async fn wallet_send(args: SendCyclesArgs) -> Result<(), String> {
     IsShutDown::guard();
     let user = caller();
+    let fee = compute_fee(args.amount);
     let ledger = storage::get_mut::<Ledger>();
 
     ledger
-        .withdraw(&user, args.amount)
+        .withdraw(&user, args.amount + fee)
         .map_err(|_| String::from("Insufficient balance."))?;
 
     #[derive(CandidType)]
@@ -214,10 +223,12 @@ async fn wallet_send(args: SendCyclesArgs) -> Result<(), String> {
         Ok(()) => {
             let refunded = api::call::msg_cycles_refunded();
             let cycles = args.amount - refunded;
+            let new_fee = compute_fee(cycles);
+            let refunded = refunded + (fee - new_fee);
             let transaction = Transaction {
                 timestamp: api::time(),
                 cycles,
-                fee: 0,
+                fee: new_fee,
                 kind: TransactionKind::Burn {
                     from: user.clone(),
                     to: args.canister,

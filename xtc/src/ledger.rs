@@ -7,6 +7,7 @@ use ic_cdk_macros::*;
 use serde::*;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use crate::fee::compute_fee;
 
 pub struct Ledger(HashMap<Principal, u64>);
 
@@ -100,17 +101,18 @@ async fn transfer(args: TransferArguments) -> Result<TransactionId, TransferErro
     let user = caller();
     crate::progress().await;
 
+    let fee = compute_fee(args.amount);
     let ledger = storage::get_mut::<Ledger>();
 
     ledger
-        .withdraw(&user, args.amount)
+        .withdraw(&user, args.amount + fee)
         .map_err(|_| TransferError::InsufficientBalance)?;
     ledger.deposit(args.to, args.amount);
 
     let transaction = Transaction {
         timestamp: api::time(),
         cycles: args.amount,
-        fee: 0,
+        fee,
         kind: TransactionKind::Transfer {
             from: user,
             to: args.to,
@@ -137,13 +139,14 @@ async fn mint(account: Option<Principal>) -> Result<TransactionId, MintError> {
     let available = api::call::msg_cycles_available();
     let accepted = api::call::msg_cycles_accept(available);
 
+    let fee = compute_fee(accepted);
     let ledger = storage::get_mut::<Ledger>();
-    ledger.deposit(account.clone(), accepted);
+    ledger.deposit(account.clone(), accepted - fee);
 
     let transaction = Transaction {
         timestamp: api::time(),
         cycles: accepted,
-        fee: 0,
+        fee,
         kind: TransactionKind::Mint { to: account },
     };
 
@@ -168,10 +171,11 @@ enum BurnError {
 async fn burn(args: BurnArguments) -> Result<TransactionId, BurnError> {
     IsShutDown::guard();
     let user = caller();
+    let fee = compute_fee(args.amount);
     let ledger = storage::get_mut::<Ledger>();
 
     ledger
-        .withdraw(&user, args.amount)
+        .withdraw(&user, args.amount + fee)
         .map_err(|_| BurnError::InsufficientBalance)?;
 
     #[derive(CandidType)]
@@ -194,10 +198,12 @@ async fn burn(args: BurnArguments) -> Result<TransactionId, BurnError> {
         Ok(()) => {
             let refunded = api::call::msg_cycles_refunded();
             let cycles = args.amount - refunded;
+            let new_fee = compute_fee(cycles);
+            let refunded = refunded + (fee - new_fee);
             let transaction = Transaction {
                 timestamp: api::time(),
                 cycles,
-                fee: 0,
+                fee: new_fee,
                 kind: TransactionKind::Burn {
                     from: user.clone(),
                     to: args.canister_id,
