@@ -53,6 +53,7 @@ impl HistoryBuffer {
             trap("Transaction is expected to have a non-zero amount.")
         }
 
+        StatsData::fee(transaction.fee);
         StatsData::increment(match &transaction.kind {
             TransactionKind::Transfer { .. } => CountTarget::Transfer,
             TransactionKind::Mint { .. } => CountTarget::Mint,
@@ -62,6 +63,7 @@ impl HistoryBuffer {
         });
 
         transaction.timestamp = transaction.timestamp / 1000000;
+
         self.history.push(transaction)
     }
 

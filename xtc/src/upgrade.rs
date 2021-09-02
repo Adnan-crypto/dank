@@ -1,19 +1,11 @@
 use crate::history::{HistoryBuffer, Transaction};
 use crate::ledger::Ledger;
 use crate::management;
-use crate::stats::StatsData;
+use crate::stats::{StatsData, StatsDataV0};
 use ic_cdk::export::candid::{CandidType, Deserialize, Principal};
 use ic_cdk::*;
 use ic_cdk_macros::*;
 use xtc_history::data::{HistoryArchive, HistoryArchiveBorrowed};
-
-#[derive(CandidType, Deserialize)]
-struct StableStorageV0 {
-    ledger: Vec<(Principal, u64)>,
-    history: Vec<Transaction>,
-    controller: Principal,
-    stats: StatsData,
-}
 
 #[derive(CandidType)]
 struct StableStorageBorrowed<'h> {
@@ -29,6 +21,14 @@ struct StableStorage {
     history: HistoryArchive,
     controller: Principal,
     stats: StatsData,
+}
+
+#[derive(CandidType, Deserialize)]
+struct StableStorageV0 {
+    ledger: Vec<(Principal, u64)>,
+    history: HistoryArchive,
+    controller: Principal,
+    stats: StatsDataV0,
 }
 
 #[pre_upgrade]
@@ -59,13 +59,8 @@ pub fn pre_upgrade() {
 pub fn post_upgrade() {
     if let Ok((stable,)) = storage::stable_restore::<(StableStorageV0,)>() {
         storage::get_mut::<Ledger>().load(stable.ledger);
-        storage::get_mut::<HistoryBuffer>().load_v0(stable.history);
-        management::Controller::load(stable.controller);
-        StatsData::load(stable.stats);
-    } else if let Ok((stable,)) = storage::stable_restore::<(StableStorage,)>() {
-        storage::get_mut::<Ledger>().load(stable.ledger);
         storage::get_mut::<HistoryBuffer>().load(stable.history);
         management::Controller::load(stable.controller);
-        StatsData::load(stable.stats);
+        StatsData::load(stable.stats.into());
     }
 }
