@@ -1,16 +1,16 @@
 //! Contains source codes related to making Dank compatible with cycles wallet so it can be used
 //! by the dfx command line.
 
+use crate::fee;
+use crate::fee::compute_fee;
 use crate::history::{HistoryBuffer, Transaction, TransactionKind};
 use crate::ledger::Ledger;
 use crate::management::IsShutDown;
 use crate::meta::meta;
-use crate::fee;
 use ic_cdk::export::candid::{CandidType, Nat, Principal};
 use ic_cdk::*;
 use ic_cdk_macros::*;
 use serde::*;
-use crate::fee::compute_fee;
 
 #[query]
 fn name() -> Option<&'static str> {

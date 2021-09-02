@@ -1,11 +1,11 @@
 mod cycles_wallet;
+mod fee;
 mod history;
 mod ledger;
 mod management;
 mod meta;
 mod stats;
 mod upgrade;
-mod fee;
 
 /// Perform only one pending async task, returns whether an async call was performed
 /// as the result of calling this method or not.

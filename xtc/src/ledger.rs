@@ -1,3 +1,4 @@
+use crate::fee::compute_fee;
 use crate::history::{HistoryBuffer, Transaction, TransactionId, TransactionKind};
 use crate::management::IsShutDown;
 use crate::stats::StatsData;
@@ -7,7 +8,6 @@ use ic_cdk_macros::*;
 use serde::*;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use crate::fee::compute_fee;
 
 pub struct Ledger(HashMap<Principal, u64>);
 
